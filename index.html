@@ -1,88 +1,130 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Guess the Photo Year</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guess the Photo Year</title>
+
+<style>
+  body {
+    font-family: sans-serif;
+    text-align: center;
+    padding: 10px;
+  }
+  img {
+    max-width: 100%;
+    border-radius: 8px;
+  }
+  input, button {
+    font-size: 16px;
+    padding: 8px;
+    margin: 6px;
+  }
+</style>
 </head>
+
 <body>
 
-<button id="login">Login with Google</button>
+<button id="login">Sign in with Google</button>
+
 <div id="game" style="display:none">
-  <img id="photo" width="400"><br><br>
-  <input id="year" placeholder="Guess year">
-  <button onclick="check()">Submit</button>
+  <img id="photo" alt="Photo">
+  <div>
+    <input id="year" type="number" placeholder="Year">
+    <button id="guess">Guess</button>
+  </div>
   <p id="result"></p>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
 <script>
-const CLIENT_ID = "821326663858-8a5sep85fflt516os0b2002chp91ks91.apps.googleusercontent.com";
-const SCOPES = "https://www.googleapis.com/auth/photoslibrary.readonly";
+/* ================= CONFIG ================= */
+const CLIENT_ID = "YOUR_CLIENT_ID_HERE";
+const SCOPE = "https://www.googleapis.com/auth/photoslibrary.readonly";
 
+/* ================= STATE ================= */
 let photos = [];
-let currentPhoto = null;
+let current = null;
 
-document.getElementById("login").onclick = async () => {
-  const token = await google.accounts.oauth2
-    .initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPES,
-      callback: async (t) => {
-        await loadPhotos(t.access_token);
-        startGame();
-      }
-    }).requestAccessToken();
+/* ================= ELEMENTS (iPad SAFE) ================= */
+const loginBtn = document.getElementById("login");
+const gameDiv = document.getElementById("game");
+const photoEl = document.getElementById("photo");
+const yearEl = document.getElementById("year");
+const resultEl = document.getElementById("result");
+const guessBtn = document.getElementById("guess");
+
+/* ================= AUTH ================= */
+loginBtn.onclick = () => {
+  google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPE,
+    callback: token => loadPhotos(token.access_token)
+  }).requestAccessToken();
 };
 
+/* ================= LOAD PHOTOS ================= */
 async function loadPhotos(token) {
-  let pageToken = "";
-  while (true) {
-    const res = await fetch(
-      "https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=100&pageToken=" + pageToken,
-      { headers: { Authorization: "Bearer " + token } }
-    );
-    const data = await res.json();
+  const res = await fetch(
+    "https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=200",
+    {
+      headers: { Authorization: "Bearer " + token }
+    }
+  );
 
-    data.mediaItems?.forEach(p => {
-      const year = new Date(p.mediaMetadata.creationTime).getFullYear();
-      if (year >= 2014) {
-        photos.push({
-          year,
-          url: p.baseUrl + "=w800"
-        });
-      }
-    });
+  const data = await res.json();
 
-    if (!data.nextPageToken) break;
-    pageToken = data.nextPageToken;
+  if (!data.mediaItems) {
+    alert("No photos returned from Google Photos.");
+    return;
   }
-}
 
-function startGame() {
-  document.getElementById("login").style.display = "none";
-  document.getElementById("game").style.display = "block";
+  photos = data.mediaItems
+    .map(p => ({
+      year: new Date(p.mediaMetadata.creationTime).getFullYear(),
+      url: p.baseUrl + "=w600"
+    }))
+    .filter(p => p.year >= 2014);
+
+  if (!photos.length) {
+    alert("No photos found from 2014 onwards.");
+    return;
+  }
+
+  loginBtn.style.display = "none";
+  gameDiv.style.display = "block";
+
   nextPhoto();
 }
 
+/* ================= GAME ================= */
 function nextPhoto() {
-  currentPhoto = photos[Math.floor(Math.random() * photos.length)];
-  document.getElementById("photo").src = currentPhoto.url;
-  document.getElementById("result").textContent = "";
-  document.getElementById("year").value = "";
+  current = photos[Math.floor(Math.random() * photos.length)];
+  photoEl.src = current.url;
+  yearEl.value = "";
+  resultEl.textContent = "";
 }
 
-function check() {
-  const guess = document.getElementById("year").value;
-  if (parseInt(guess) === currentPhoto.year) {
-    document.getElementById("result").textContent = "Correct!";
-  } else {
-    document.getElementById("result").textContent =
-      "Wrong. It was " + currentPhoto.year;
+function checkGuess() {
+  const guess = parseInt(yearEl.value, 10);
+
+  if (Number.isNaN(guess)) {
+    resultEl.textContent = "Enter a year";
+    return;
   }
-  setTimeout(nextPhoto, 1500);
-}
-</script>
 
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+  resultEl.textContent =
+    guess === current.year
+      ? "Correct!"
+      : "It was " + current.year;
+
+  setTimeout(nextPhoto, 1200);
+}
+
+/* ================= EVENTS ================= */
+guessBtn.onclick = checkGuess;
+</script>
 
 </body>
 </html>
