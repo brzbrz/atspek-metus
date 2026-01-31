@@ -1,1 +1,88 @@
-a
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Guess the Photo Year</title>
+</head>
+<body>
+
+<button id="login">Login with Google</button>
+<div id="game" style="display:none">
+  <img id="photo" width="400"><br><br>
+  <input id="year" placeholder="Guess year">
+  <button onclick="check()">Submit</button>
+  <p id="result"></p>
+</div>
+
+<script>
+const CLIENT_ID = "YOUR_CLIENT_ID_HERE";
+const SCOPES = "https://www.googleapis.com/auth/photoslibrary.readonly";
+
+let photos = [];
+let currentPhoto = null;
+
+document.getElementById("login").onclick = async () => {
+  const token = await google.accounts.oauth2
+    .initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: async (t) => {
+        await loadPhotos(t.access_token);
+        startGame();
+      }
+    }).requestAccessToken();
+};
+
+async function loadPhotos(token) {
+  let pageToken = "";
+  while (true) {
+    const res = await fetch(
+      "https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=100&pageToken=" + pageToken,
+      { headers: { Authorization: "Bearer " + token } }
+    );
+    const data = await res.json();
+
+    data.mediaItems?.forEach(p => {
+      const year = new Date(p.mediaMetadata.creationTime).getFullYear();
+      if (year >= 2014) {
+        photos.push({
+          year,
+          url: p.baseUrl + "=w800"
+        });
+      }
+    });
+
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+}
+
+function startGame() {
+  document.getElementById("login").style.display = "none";
+  document.getElementById("game").style.display = "block";
+  nextPhoto();
+}
+
+function nextPhoto() {
+  currentPhoto = photos[Math.floor(Math.random() * photos.length)];
+  document.getElementById("photo").src = currentPhoto.url;
+  document.getElementById("result").textContent = "";
+  document.getElementById("year").value = "";
+}
+
+function check() {
+  const guess = document.getElementById("year").value;
+  if (parseInt(guess) === currentPhoto.year) {
+    document.getElementById("result").textContent = "Correct!";
+  } else {
+    document.getElementById("result").textContent =
+      "Wrong. It was " + currentPhoto.year;
+  }
+  setTimeout(nextPhoto, 1500);
+}
+</script>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+</body>
+</html>
